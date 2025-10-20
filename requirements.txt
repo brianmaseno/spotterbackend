@@ -1,10 +1,10 @@
 Django==4.2.7
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
-pymongo==4.6.0
-python-dotenv==1.0.0
-requests==2.31.0
-Pillow==10.1.0
-reportlab==4.0.7
+pymongo==4.10.1
+python-dotenv==1.0.1
+requests==2.32.3
+Pillow==11.0.0
+reportlab==4.2.5
 geopy==2.4.1
-gunicorn==21.2.0
+gunicorn==23.0.0
