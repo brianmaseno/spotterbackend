@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: spotterai-backend
+    env: python
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: spotterai
+      - key: AZURE_MAPS_SUBSCRIPTION_KEY
+        sync: false
