@@ -113,7 +113,7 @@ class ELDLogGenerator:
         y -= 0.3 * inch
         
         # 24-hour period note
-        pdf.setFont("Helvetica-Italic", 8)
+        pdf.setFont("Helvetica-Oblique", 8)
         pdf.drawString(self.MARGIN, y, "(24-hour period starting midnight)")
     
     def _draw_grid(self, pdf: canvas.Canvas):

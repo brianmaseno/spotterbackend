@@ -161,36 +161,100 @@ class GenerateELDPDFView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Parse daily logs
+            # Parse daily logs with comprehensive error handling
             daily_logs = []
-            for log in trip['trip_plan']['daily_logs']:
-                parsed_log = {
-                    'date': datetime.fromisoformat(log['date']),
-                    'total_miles': log['total_miles'],
-                    'total_driving': log['total_driving'],
-                    'total_on_duty': log['total_on_duty'],
-                    'total_off_duty': log['total_off_duty'],
-                    'total_sleeper': log['total_sleeper'],
-                    'activities': [
-                        {
-                            'start_time': datetime.fromisoformat(activity['start_time']),
-                            'duration_hours': activity['duration_hours'],
-                            'duty_status': activity['duty_status'],
-                            'activity': activity['activity'],
-                            'description': activity.get('description', ''),
-                            'distance_miles': activity.get('distance_miles', 0)
-                        }
-                        for activity in log['activities']
-                    ]
-                }
-                daily_logs.append(parsed_log)
+            print(f"Processing trip: {trip_id}")
+            print(f"Trip has {len(trip['trip_plan']['daily_logs'])} daily logs")
+            
+            for idx, log in enumerate(trip['trip_plan']['daily_logs']):
+                try:
+                    print(f"\nProcessing log {idx + 1}")
+                    print(f"Log keys: {log.keys()}")
+                    
+                    # Parse date - handle both string and datetime objects
+                    date_value = log.get('date')
+                    if date_value is None:
+                        print("Warning: No date field found, using current date")
+                        parsed_date = datetime.now()
+                    elif isinstance(date_value, str):
+                        # Try multiple date formats
+                        try:
+                            parsed_date = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                        except:
+                            try:
+                                parsed_date = datetime.strptime(date_value.split('T')[0], '%Y-%m-%d')
+                            except:
+                                print(f"Warning: Could not parse date '{date_value}', using current date")
+                                parsed_date = datetime.now()
+                    else:
+                        parsed_date = date_value
+                    
+                    parsed_log = {
+                        'date': parsed_date,
+                        'total_miles': float(log.get('total_miles', 0)),
+                        'total_driving': float(log.get('total_driving', 0)),
+                        'total_on_duty': float(log.get('total_on_duty', 0)),
+                        'total_off_duty': float(log.get('total_off_duty', 0)),
+                        'total_sleeper': float(log.get('total_sleeper', 0)),
+                        'activities': []
+                    }
+                    
+                    # Parse activities
+                    activities = log.get('activities', [])
+                    print(f"Processing {len(activities)} activities")
+                    
+                    for act_idx, activity in enumerate(activities):
+                        try:
+                            start_time_value = activity.get('start_time')
+                            if start_time_value is None:
+                                print(f"Warning: Activity {act_idx} has no start_time")
+                                activity_start_time = parsed_date
+                            elif isinstance(start_time_value, str):
+                                try:
+                                    activity_start_time = datetime.fromisoformat(start_time_value.replace('Z', '+00:00'))
+                                except:
+                                    print(f"Warning: Could not parse activity start_time '{start_time_value}'")
+                                    activity_start_time = parsed_date
+                            else:
+                                activity_start_time = start_time_value
+                            
+                            parsed_log['activities'].append({
+                                'start_time': activity_start_time,
+                                'duration_hours': float(activity.get('duration_hours', 0)),
+                                'duty_status': activity.get('duty_status', 'off_duty'),
+                                'activity': activity.get('activity', 'Unknown'),
+                                'description': activity.get('description', ''),
+                                'distance_miles': float(activity.get('distance_miles', 0))
+                            })
+                        except Exception as e:
+                            print(f"Error parsing activity {act_idx}: {e}")
+                            continue
+                    
+                    daily_logs.append(parsed_log)
+                    print(f"Successfully parsed log {idx + 1}")
+                    
+                except Exception as e:
+                    print(f"Error parsing log {idx + 1}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+            
+            print(f"\nSuccessfully parsed {len(daily_logs)} logs")
+            
+            if len(daily_logs) == 0:
+                return Response(
+                    {"error": "No valid daily logs found for this trip"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Generate PDF
+            print("Generating PDF...")
             eld_generator = ELDLogGenerator()
             pdf_bytes = eld_generator.generate_daily_logs(
                 daily_logs=daily_logs,
                 driver_info=trip.get('driver_info', {})
             )
+            print(f"PDF generated successfully: {len(pdf_bytes)} bytes")
             
             # Return PDF
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -199,9 +263,11 @@ class GenerateELDPDFView(APIView):
             
         except Exception as e:
             print(f"Error generating PDF: {str(e)}")
+            print(f"Error type: {type(e).__name__}")
+            import traceback
             traceback.print_exc()
             return Response(
-                {"error": "Failed to generate PDF", "details": str(e)},
+                {"error": "Failed to generate PDF", "details": str(e), "type": type(e).__name__},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -241,10 +307,11 @@ class TripListView(APIView):
     """
     
     def get(self, request):
-        """List recent trips"""
+        """List recent trips with full details"""
         try:
+            limit = int(request.GET.get('limit', 50))
             mongo = MongoDBHandler()
-            trips = mongo.list_trips(limit=20)
+            trips = mongo.list_trips_full(limit=limit)
             mongo.close()
             
             return Response({"trips": trips}, status=status.HTTP_200_OK)
@@ -252,6 +319,37 @@ class TripListView(APIView):
         except Exception as e:
             return Response(
                 {"error": "Failed to retrieve trips", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class TripDeleteView(APIView):
+    """
+    API endpoint to delete a trip
+    DELETE: Delete trip by ID
+    """
+    
+    def delete(self, request, trip_id):
+        """Delete a trip"""
+        try:
+            mongo = MongoDBHandler()
+            deleted = mongo.delete_trip(trip_id)
+            mongo.close()
+            
+            if not deleted:
+                return Response(
+                    {"error": "Trip not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            return Response(
+                {"message": "Trip deleted successfully"},
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {"error": "Failed to delete trip", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

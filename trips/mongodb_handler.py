@@ -90,6 +90,26 @@ class MongoDBHandler:
         
         return result
     
+    def list_trips_full(self, limit: int = 50) -> List[Dict]:
+        """
+        List recent trips with full details
+        
+        Args:
+            limit: Maximum number of trips to return
+            
+        Returns:
+            List of complete trip data
+        """
+        trips = self.trips_collection.find().sort('created_at', -1).limit(limit)
+        
+        result = []
+        for trip in trips:
+            trip['_id'] = str(trip['_id'])
+            trip['created_at'] = trip['created_at'].isoformat()
+            result.append(trip)
+        
+        return result
+    
     def delete_trip(self, trip_id: str) -> bool:
         """
         Delete trip by ID

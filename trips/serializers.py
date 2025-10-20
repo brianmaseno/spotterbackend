@@ -8,6 +8,7 @@ class LocationSerializer(serializers.Serializer):
     """Serializer for location coordinates"""
     lat = serializers.FloatField()
     lon = serializers.FloatField()
+    address = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class TripPlanRequestSerializer(serializers.Serializer):
