@@ -216,30 +216,43 @@ class ELDLogGenerator:
     
     def _draw_remarks(self, pdf: canvas.Canvas, log: Dict):
         """
-        Draw remarks section with activity details
+        Draw remarks section with activity details and locations (FMCSA compliant)
         """
         y = self.GRID_START_Y - 0.3 * inch
         
         pdf.setFont("Helvetica-Bold", 10)
-        pdf.drawString(self.MARGIN, y, "Remarks:")
+        pdf.drawString(self.MARGIN, y, "REMARKS (Location for each duty status change):")
         y -= 0.15 * inch
         
         pdf.setFont("Helvetica", 8)
         
-        # List key activities
+        # Build remarks with city, state for each duty status change
+        remarks = []
         for activity in log['activities']:
+            # Get location info
+            location_info = activity.get('location_info', {})
+            city = location_info.get('city', 'Unknown')
+            state = location_info.get('state', 'Unknown')
+            location_str = f"{city}, {state}"
+            
+            time_str = activity['start_time'].strftime("%I:%M %p")
+            
+            # Only show significant activities and duty status changes
             if activity['duty_status'] in ['driving', 'on_duty_not_driving'] or 'Break' in activity['activity']:
-                time_str = activity['start_time'].strftime("%I:%M %p")
-                remark = f"{time_str} - {activity['activity']}"
-                if activity.get('description'):
-                    remark += f": {activity['description']}"
+                remark = f"{time_str} - {activity['activity']} ({location_str})"
+                if activity.get('description') and len(activity['description']) > 0:
+                    remark += f": {activity['description'][:50]}"
                 
-                pdf.drawString(self.MARGIN + 10, y, remark[:100])  # Limit length
-                y -= 0.12 * inch
-                
-                # Stop if we run out of space
-                if y < self.MARGIN + 0.5 * inch:
-                    break
+                remarks.append(remark)
+        
+        # Draw remarks
+        for remark in remarks[:15]:  # Limit to 15 remarks to avoid overflow
+            pdf.drawString(self.MARGIN + 10, y, remark[:120])  # Limit length
+            y -= 0.12 * inch
+            
+            # Stop if we run out of space
+            if y < self.MARGIN + 0.5 * inch:
+                break
     
     def _draw_totals(self, pdf: canvas.Canvas, log: Dict):
         """

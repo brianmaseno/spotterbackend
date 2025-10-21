@@ -21,6 +21,17 @@ class TripPlanRequestSerializer(serializers.Serializer):
     carrier_name = serializers.CharField(max_length=200, default="Example Carrier Inc.")
     main_office = serializers.CharField(max_length=200, default="123 Main St, City, ST")
     vehicle_number = serializers.CharField(max_length=50, default="TRUCK-001")
+    
+    # New HOS compliance fields
+    weekly_mode = serializers.ChoiceField(choices=['70/8', '60/7'], default='70/8')
+    use_split_sleeper = serializers.BooleanField(default=False)
+    daily_hours_history = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list
+    )
+    use_adverse_conditions = serializers.BooleanField(default=False)
+    use_air_mile_exception = serializers.BooleanField(default=False)
 
 
 class ActivitySerializer(serializers.Serializer):

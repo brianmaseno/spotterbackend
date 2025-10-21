@@ -50,8 +50,17 @@ class TripPlanView(APIView):
             
             # Initialize services
             azure_maps = AzureMapsService()
+            
+            # Create reverse geocoding function
+            def reverse_geocode(lat, lon):
+                return azure_maps.reverse_geocode(lat, lon)
+            
             hos_calculator = HOSCalculator(
-                current_cycle_used=data['current_cycle_used']
+                current_cycle_used=data['current_cycle_used'],
+                weekly_mode=data.get('weekly_mode', '70/8'),
+                daily_hours_history=data.get('daily_hours_history', []),
+                use_split_sleeper=data.get('use_split_sleeper', False),
+                reverse_geocode_func=reverse_geocode
             )
             
             # Calculate route
@@ -365,4 +374,46 @@ class HealthCheckView(APIView):
             "status": "ok",
             "message": "ELD Trip Planning API is running"
         }, status=status.HTTP_200_OK)
+
+
+class RollingHoursView(APIView):
+    """
+    API endpoint to calculate rolling 60/70-hour limits
+    POST: Calculate rolling hours from history
+    """
+    
+    def post(self, request):
+        """
+        Calculate rolling hours
+        
+        Request body:
+        {
+            "daily_hours_history": [
+                {"date": "2025-10-14", "on_duty_hours": 11},
+                {"date": "2025-10-15", "on_duty_hours": 10.5}
+            ],
+            "weekly_mode": "70/8"  // or "60/7"
+        }
+        """
+        try:
+            daily_hours_history = request.data.get('daily_hours_history', [])
+            weekly_mode = request.data.get('weekly_mode', '70/8')
+            
+            # Initialize calculator
+            hos_calculator = HOSCalculator(
+                current_cycle_used=0,
+                weekly_mode=weekly_mode
+            )
+            
+            # Calculate rolling hours
+            rolling_hours = hos_calculator.calculate_rolling_hours(daily_hours_history)
+            
+            return Response(rolling_hours, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": "Failed to calculate rolling hours", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
